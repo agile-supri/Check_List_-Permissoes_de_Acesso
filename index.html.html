@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Controle de Permissões de Pastas</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f6f8fa;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header img {
+      max-width: 180px;
+      height: auto;
+      margin-bottom: 10px;
+    }
+
+    .header h2 {
+      margin: 0;
+      color: #333;
+      font-size: 22px;
+    }
+
+    .cliente-input {
+      text-align: center;
+      margin: 15px 0 25px;
+    }
+
+    .cliente-input label {
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .cliente-input input {
+      padding: 6px 10px;
+      font-size: 15px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 250px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+    }
+
+    th {
+      background: #F68633;
+      color: white;
+      position: sticky;
+      top: 0;
+    }
+
+    tr:nth-child(even) {
+      background: #f2f2f2;
+    }
+
+    .btn-container {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .export-btn {
+      padding: 10px 15px;
+      border: none;
+      background: #F68633;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      margin: 0 10px;
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <div class="header">
+    <img id="pageLogo" src="https://upload.wikimedia.org/wikipedia/commons/c/c2/AGILE_-_Nova_Logo_2025_HORIZONTAL_-_tag-branca.png" alt="Logo da Empresa">
+    <h2>Controle de Permissões por Pasta e Grupo</h2>
+  </div>
+
+  <div class="cliente-input">
+    <label for="cliente">Cliente:</label>
+    <input type="text" id="cliente" placeholder="Digite o nome do cliente" />
+  </div>
+
+  <table id="permissionsTable"></table>
+
+  <div class="btn-container">
+    <button class="export-btn" onclick="exportPDF()">Exportar para PDF</button>
+    <button class="export-btn" onclick="exportCSV()">Exportar para CSV</button>
+  </div>
+
+  <script>
+    const CONFIG = {
+      corHeader: "#F68633",
+      corFooter: "#F68633"
+    };
+
+    const pastas = [
+      "000 - Catálogos","001 - G-Code CNC","002 - Assistências","003 - Banco",
+      "004 - Desenvolvimento","005 - Blocos 3D","006 - PCP","007 - Almoxarifados",
+      "008 - Certificados","009 - Comercial","010 - Evidências","011 - Convenção",
+      "012 - Financeiro","013 - Qualidade","014 - Compras","015 - Etiquetas",
+      "016 - Modelos Escritório","017 - Corte","018 - Logos","019 - Padrões Breton",
+      "020 - Fotos","021 - Expedição","022 - Programações","023 - RH","024 - Pedidos"
+    ];
+
+    const grupos = [
+      "Almoxarifado","Comercial","Compras","Desenvolvimento","Diretoria",
+      "Expedição","Fibra","Financeiro","Máquinas","PCP","RH"
+    ];
+
+    const table = document.getElementById("permissionsTable");
+    let headerRow = "<tr><th>Pasta</th>";
+    grupos.forEach(g => headerRow += `<th>${g}</th>`);
+    headerRow += "</tr>";
+    table.innerHTML = headerRow;
+
+    pastas.forEach(pasta => {
+      let row = `<tr><td>${pasta}</td>`;
+      grupos.forEach(grupo => {
+        const id = `${pasta}_${grupo}`.replace(/\s+/g, "_");
+        row += `<td><input type="checkbox" id="${id}"></td>`;
+      });
+      row += "</tr>";
+      table.innerHTML += row;
+    });
+
+    function getSelectedData() {
+      const data = [];
+      pastas.forEach(pasta => {
+        grupos.forEach(grupo => {
+          const id = `${pasta}_${grupo}`.replace(/\s+/g, "_");
+          if (document.getElementById(id).checked)
+            data.push({ pasta, grupo });
+        });
+      });
+      return data;
+    }
+
+    function exportCSV() {
+      const data = getSelectedData();
+      if (data.length === 0) return alert("Nenhuma permissão marcada!");
+      let csv = "Pasta,Grupo\n";
+      data.forEach(item => csv += `"${item.pasta}","${item.grupo}"\n`);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "permissoes.csv"; a.click();
+    }
+
+    async function exportPDF() {
+      const cliente = document.getElementById("cliente").value.trim() || "Cliente não informado";
+      const data = getSelectedData();
+      if (data.length === 0) return alert("Nenhuma permissão marcada!");
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      const headerRgb = { r: 246, g: 134, b: 51 };
+      const footerRgb = { r: 246, g: 134, b: 51 };
+
+      const logoUrl = document.getElementById("pageLogo").src;
+      const logoData = await new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = function() {
+          const c = document.createElement("canvas");
+          c.width = this.width; c.height = this.height;
+          const ctx = c.getContext("2d");
+          ctx.drawImage(this, 0, 0);
+          resolve(c.toDataURL("image/png"));
+        };
+        img.onerror = () => resolve(null);
+        img.src = logoUrl;
+      });
+
+      doc.setFillColor(headerRgb.r, headerRgb.g, headerRgb.b);
+      doc.rect(0, 0, pageWidth, 20, "F");
+      doc.setFillColor(footerRgb.r, footerRgb.g, footerRgb.b);
+      doc.rect(0, pageHeight - 15, pageWidth, 15, "F");
+
+      const dataAtual = new Date().toLocaleDateString("pt-BR");
+      doc.setFontSize(10);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`Cliente: ${cliente}`, 10, 13);
+      doc.text(`Data: ${dataAtual}`, pageWidth - 10 - doc.getTextWidth(`Data: ${dataAtual}`), 13);
+
+      if (logoData) doc.addImage(logoData, "PNG", pageWidth/2 - 30, 22, 60, 15);
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(12);
+      doc.text("Permissões de Pastas e Grupos", pageWidth / 2, 45, { align: "center" });
+
+      // Agrupa por grupo
+      const gruposMap = {};
+      data.forEach(d => {
+        if (!gruposMap[d.grupo]) gruposMap[d.grupo] = [];
+        gruposMap[d.grupo].push(d.pasta);
+      });
+
+      // Divide grupos para duas colunas
+      const colunas = [[], []];
+      const nomesGrupos = Object.keys(gruposMap).sort();
+      nomesGrupos.forEach((g, i) => colunas[i % 2].push(g));
+
+      const margemEsq = 15;
+      const margemDir = pageWidth / 2 + 5;
+      const colunaLargura = (pageWidth / 2) - 20;
+
+      doc.setFontSize(9);
+      let y1 = 55, y2 = 55;
+
+      colunas[0].forEach(grupo => {
+        doc.setFont("helvetica", "bold");
+        doc.text(`• ${grupo}`, margemEsq, y1);
+        y1 += 5;
+        doc.setFont("helvetica", "normal");
+        gruposMap[grupo].forEach(pasta => {
+          doc.text(`- ${pasta}`, margemEsq + 5, y1);
+          y1 += 4;
+        });
+        y1 += 4;
+      });
+
+      colunas[1].forEach(grupo => {
+        doc.setFont("helvetica", "bold");
+        doc.text(`• ${grupo}`, margemDir, y2);
+        y2 += 5;
+        doc.setFont("helvetica", "normal");
+        gruposMap[grupo].forEach(pasta => {
+          doc.text(`- ${pasta}`, margemDir + 5, y2);
+          y2 += 4;
+        });
+        y2 += 4;
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text("Página 1 / 1", pageWidth - 25, pageHeight - 6);
+      doc.save("permissoes.pdf");
+    }
+  </script>
+</body>
+</html>
